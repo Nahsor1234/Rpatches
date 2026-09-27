@@ -1,0 +1,72 @@
+name: Build Morphe patch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Rpatches
+        uses: actions/checkout@v4
+
+      - name: Checkout current Morphe template
+        uses: actions/checkout@v4
+        with:
+          repository: MorpheApp/morphe-patches-template
+          ref: main
+          path: morphe-template
+
+      - name: Overlay custom patches
+        run: |
+          mkdir -p morphe-template/patches/src/main/kotlin/app/roshan/patches/motion
+          cp patches/src/main/kotlin/app/roshan/patches/motion/DisableScreenshotProtectionPatch.kt \
+             morphe-template/patches/src/main/kotlin/app/roshan/patches/motion/
+
+          # Give the generated patch bundle our project identity.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("morphe-template/patches/build.gradle.kts")
+          s = p.read_text()
+          s = s.replace('group = "app.template"', 'group = "app.roshan.rpatches"')
+          s = s.replace('name = "UserXYZ Patches"', 'name = "Rpatches"')
+          s = s.replace('description = "Patches for apps I like"', 'description = "Roshan custom Android patches"')
+          s = s.replace('source = "git@github.com:UserXYZ/morphe-patches.git"', 'source = "https://github.com/Nahsor1234/Rpatches"')
+          s = s.replace('author = "Awesome dev"', 'author = "Roshan"')
+          s = s.replace('contact = "na"', 'contact = "https://github.com/Nahsor1234"')
+          s = s.replace('website = "na"', 'website = "https://github.com/Nahsor1234/Rpatches"')
+          p.write_text(s)
+          PY
+
+      - name: Configure GitHub Packages authentication
+        run: |
+          mkdir -p ~/.gradle
+          cat >> ~/.gradle/gradle.properties <<EOF
+          gpr.user=${{ github.actor }}
+          gpr.key=${{ secrets.GITHUB_TOKEN }}
+          EOF
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build .mpp
+        working-directory: morphe-template
+        run: ./gradlew :patches:buildAndroid --no-daemon
+
+      - name: Upload .mpp
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rpatches-mpp
+          path: morphe-template/patches/build/libs/patches-*.mpp
+          if-no-files-found: error
