@@ -33,6 +33,9 @@ val disableMotionScreenshotProtectionPatch = bytecodePatch(
     name = "Disable Motion screenshot protection",
     description = "Disables Motion 4.2.17's app-specific FLAG_SECURE enable call."
 ) {
+    // Restrict this patch to the exact application/version we analyzed.
+    compatibleWith("com.elearning.motion"("4.2.17"))
+
     execute {
         val match = MotionScreenshotEnableFingerprint.instructionMatches.singleOrNull()
             ?: error("Motion screenshot protection: expected exactly one Window.setFlags call")
@@ -47,8 +50,8 @@ val disableMotionScreenshotProtectionPatch = bytecodePatch(
         val flagRegister = instruction.registerD
         val maskRegister = instruction.registerE
 
-        // The two arguments must be the same FLAG_SECURE value. The constant
-        // itself is preserved in the method; only the call is changed.
+        // Only replace the call when setFlags receives the same value for
+        // both arguments, which is the FLAG_SECURE pattern we analyzed.
         if (flagRegister != maskRegister) {
             error("Motion screenshot protection: setFlags arguments are not identical")
         }
