@@ -31,7 +31,7 @@ jobs:
           mkdir -p morphe-template/extensions/extension/src/main/java/app/roshan/extension
           cp patches/src/main/kotlin/app/roshan/patches/motion/*.kt \
              morphe-template/patches/src/main/kotlin/app/roshan/patches/motion/
-          cp extensions/src/main/java/app/roshan/extension/MotionHomeCleaner.java \
+          cp extensions/extension/src/main/java/app/roshan/extension/MotionHomeCleaner.java \
              morphe-template/extensions/extension/src/main/java/app/roshan/extension/
 
           # Give the generated patch bundle our project identity.
