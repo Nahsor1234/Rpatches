@@ -4,16 +4,19 @@ import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.widget.HorizontalScrollView;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.util.Locale;
 import java.util.WeakHashMap;
 
 /**
  * Runtime UI cleaner for Motion 4.2.17.
  *
- * It intentionally operates only on the React Native view tree. It does not
- * change navigation or learning data; it hides selected home-screen marketing
- * sections after they are rendered.
+ * Operates only on the React Native view tree and removes selected home-screen
+ * promotional/recommendation sections. It deliberately avoids ScrollView
+ * containers so a match can never hide the entire home feed.
  */
 public final class MotionHomeCleaner {
     private static final long RESCAN_INTERVAL_MS = 1000L;
@@ -50,7 +53,7 @@ public final class MotionHomeCleaner {
 
     private static void scan(View view, View root) {
         if (view instanceof TextView) {
-            String text = String.valueOf(((TextView) view).getText()).trim();
+            String text = normalize(((TextView) view).getText());
             if (isMarketingTarget(text)) {
                 if (isSmallActionTarget(text)) {
                     hideClickableAncestor((TextView) view);
@@ -69,35 +72,47 @@ public final class MotionHomeCleaner {
         }
     }
 
+    private static String normalize(CharSequence value) {
+        if (value == null) return "";
+        return value.toString()
+                .replace('\u00A0', ' ')
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+    }
+
     private static boolean isMarketingTarget(String text) {
         if (text.length() == 0) return false;
 
-        return text.contains("Invite friends")
+        return text.contains("invite friends")
                 || text.contains("earn rewards")
-                || text.startsWith("WLS:")
+                || text.startsWith("wls:")
                 || text.contains("is leading with")
-                || text.equals("Test Arena")
-                || text.equals("Ek Package Puri Taiyari")
-                || text.equals("Selection Wala Combo")
-                || text.equals("AI Based Practice")
-                || text.equals("Trending Videos")
-                || text.equals("Complete Your Profile")
-                || text.equals("Daily Motivation")
-                || text.equals("What our students say");
+                || text.equals("test arena")
+                || text.equals("ek package puri taiyari")
+                || text.equals("selection wala combo")
+                || text.equals("ai based practice")
+                || text.equals("trending videos")
+                || text.equals("complete your profile")
+                || text.equals("daily motivation")
+                || text.equals("what our students say")
+                || text.contains("see what toppers are watching to boost their rank")
+                || text.contains("motion made challenging topics manageable");
     }
 
     private static boolean isSmallActionTarget(String text) {
-        return text.contains("Invite friends")
+        return text.contains("invite friends")
                 || text.contains("earn rewards")
-                || text.equals("Test Arena")
-                || text.equals("Ek Package Puri Taiyari")
-                || text.equals("Selection Wala Combo")
-                || text.equals("AI Based Practice")
-                || text.equals("Complete Your Profile");
+                || text.equals("test arena")
+                || text.equals("ek package puri taiyari")
+                || text.equals("selection wala combo")
+                || text.equals("ai based practice")
+                || text.equals("complete your profile");
     }
 
     private static void hideClickableAncestor(TextView textView) {
         View current = textView;
+
         for (int depth = 0; depth < 6; depth++) {
             if (current.isClickable() || current.hasOnClickListeners()) {
                 current.setVisibility(View.GONE);
@@ -113,35 +128,44 @@ public final class MotionHomeCleaner {
     }
 
     private static void hideSectionAncestor(TextView textView, View root) {
-        int rootWidth = root.getWidth();
-        int rootHeight = root.getHeight();
+        final int rootWidth = root.getWidth();
+        final int rootHeight = root.getHeight();
 
-        View candidate = textView;
         View current = textView;
+        View candidate = null;
 
-        for (int depth = 0; depth < 8; depth++) {
+        for (int depth = 0; depth < 10; depth++) {
             ViewParent parent = current.getParent();
             if (!(parent instanceof View) || parent == root) break;
 
             current = (View) parent;
+
+            // Never hide a scrolling container: doing so can blank the whole feed.
+            if (current instanceof ScrollView || current instanceof HorizontalScrollView) {
+                continue;
+            }
+
             int width = current.getWidth();
             int height = current.getHeight();
 
-            // Section-level containers in Motion span most of the content width
-            // but are much shorter than the complete React root.
+            int minHeight = dp(current, 80);
+            int maxHeight = dp(current, 520);
+
             if (rootWidth > 0
-                    && rootHeight > 0
                     && width >= (int) (rootWidth * 0.65f)
-                    && height >= dp(current, 60)
-                    && height <= (int) (rootHeight * 0.70f)) {
+                    && height >= minHeight
+                    && height <= maxHeight
+                    && (rootHeight <= 0 || height < (int) (rootHeight * 0.60f))) {
                 candidate = current;
                 break;
             }
         }
 
-        if (candidate != textView) {
+        if (candidate != null) {
             candidate.setVisibility(View.GONE);
         } else {
+            // Fail closed: hide only the matching label instead of risking
+            // removal of a large parent container.
             textView.setVisibility(View.GONE);
         }
     }
